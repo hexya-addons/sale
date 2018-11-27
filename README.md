@@ -1,5 +1,5 @@
-[![Build Status](https://travis-ci.com/hexya-addons/saleTeams.svg?branch=master)](https://travis-ci.com/hexya-addons/saleTeams)
-[![Go Report Card](https://goreportcard.com/badge/hexya-addons/saleTeams)](https://goreportcard.com/report/hexya-addons/saleTeams)
+[![Build Status](https://travis-ci.com/hexya-addons/sale.svg?branch=master)](https://travis-ci.com/hexya-addons/sale)
+[![Go Report Card](https://goreportcard.com/badge/hexya-addons/sale)](https://goreportcard.com/report/hexya-addons/sale)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 # Sale 
