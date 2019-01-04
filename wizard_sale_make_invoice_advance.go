@@ -79,12 +79,12 @@ func init() {
 
 	h.SaleAdvancePaymentInv().Methods().OnchangeAdvancePaymentMethod().DeclareMethod(
 		`OnchangeAdvancePaymentMethod sets the amount to 0 when percentage is selected.`,
-		func(rs h.SaleAdvancePaymentInvSet) (*h.SaleAdvancePaymentInvData, []models.FieldNamer) {
-			var fieldsToReset []models.FieldNamer
+		func(rs h.SaleAdvancePaymentInvSet) *h.SaleAdvancePaymentInvData {
+			res := h.SaleAdvancePaymentInv().NewData()
 			if rs.AdvancePaymentMethod() == "percentage" {
-				fieldsToReset = append(fieldsToReset, h.SaleAdvancePaymentInv().Amount())
+				res.SetAmount(0)
 			}
-			return &h.SaleAdvancePaymentInvData{}, fieldsToReset
+			return res
 		})
 
 	h.SaleAdvancePaymentInv().Methods().CreateInvoice().DeclareMethod(
@@ -134,36 +134,34 @@ You may have to install a chart of account from Accounting app, settings menu.`,
 				fPos = order.FiscalPosition()
 			}
 			invoiceLines := h.AccountInvoiceLine().Create(rs.Env(),
-				&h.AccountInvoiceLineData{
-					Name:             name,
-					Origin:           order.Name(),
-					Account:          account,
-					PriceUnit:        amount,
-					Quantity:         1,
-					Discount:         0,
-					Uom:              rs.Product().Uom(),
-					Product:          rs.Product(),
-					SaleLines:        soLine,
-					InvoiceLineTaxes: taxes,
-					AccountAnalytic:  order.Project(),
-				})
+				h.AccountInvoiceLine().NewData().
+					SetName(name).
+					SetOrigin(order.Name()).
+					SetAccount(account).
+					SetPriceUnit(amount).
+					SetQuantity(1).
+					SetDiscount(0).
+					SetUom(rs.Product().Uom()).
+					SetProduct(rs.Product()).
+					SetSaleLines(soLine).
+					SetInvoiceLineTaxes(taxes).
+					SetAccountAnalytic(order.Project()))
 			invoice := h.AccountInvoice().Create(rs.Env(),
-				&h.AccountInvoiceData{
-					Name:            nameInv,
-					Origin:          order.Name(),
-					Type:            "out_invoice",
-					Reference:       "",
-					Account:         order.Partner().PropertyAccountReceivable(),
-					Partner:         order.PartnerInvoice(),
-					PartnerShipping: order.PartnerShipping(),
-					InvoiceLines:    invoiceLines,
-					Currency:        order.Pricelist().Currency(),
-					PaymentTerm:     order.PaymentTerm(),
-					FiscalPosition:  fPos,
-					Team:            order.Team(),
-					User:            order.User(),
-					Comment:         order.Note(),
-				})
+				h.AccountInvoice().NewData().
+					SetName(nameInv).
+					SetOrigin(order.Name()).
+					SetType("out_invoice").
+					SetReference("").
+					SetAccount(order.Partner().PropertyAccountReceivable()).
+					SetPartner(order.PartnerInvoice()).
+					SetPartnerShipping(order.PartnerShipping()).
+					SetInvoiceLines(invoiceLines).
+					SetCurrency(order.Pricelist().Currency()).
+					SetPaymentTerm(order.PaymentTerm()).
+					SetFiscalPosition(fPos).
+					SetTeam(order.Team()).
+					SetUser(order.User()).
+					SetComment(order.Note()))
 			invoice.ComputeTaxes()
 			//invoice.message_post_with_view('mail.message_origin_link',
 			//            values={'self': invoice, 'origin': order},
@@ -212,16 +210,15 @@ Please use another product or update this product.`))
 							h.Partner().NewSet(rs.Env()))
 					}
 					SOLine := h.SaleOrderLine().Create(rs.Env(),
-						&h.SaleOrderLineData{
-							Name:          rs.T("Advance: %v", dates.Today()),
-							PriceUnit:     amount,
-							ProductUomQty: 0,
-							Order:         order,
-							Discount:      0,
-							ProductUom:    rs.Product().Uom(),
-							Product:       rs.Product(),
-							Tax:           taxes,
-						})
+						h.SaleOrderLine().NewData().
+							SetName(rs.T("Advance: %v", dates.Today())).
+							SetPriceUnit(amount).
+							SetProductUomQty(0).
+							SetOrder(order).
+							SetDiscount(0).
+							SetProductUom(rs.Product().Uom()).
+							SetProduct(rs.Product()).
+							SetTax(taxes))
 					rs.CreateInvoice(order, SOLine)
 				}
 			}
@@ -236,13 +233,12 @@ Please use another product or update this product.`))
 	h.SaleAdvancePaymentInv().Methods().PrepareDepositProduct().DeclareMethod(
 		`PrepareDepositProduct returns the data used to create the deposit product.`,
 		func(rs h.SaleAdvancePaymentInvSet) *h.ProductProductData {
-			return &h.ProductProductData{
-				Name:                  "Down payment",
-				Type:                  "service",
-				InvoicePolicy:         "order",
-				PropertyAccountIncome: rs.DepositAccount(),
-				Taxes:                 rs.DepositTaxes(),
-			}
+			return h.ProductProduct().NewData().
+				SetName("Down payment").
+				SetType("service").
+				SetInvoicePolicy("order").
+				SetPropertyAccountIncome(rs.DepositAccount()).
+				SetTaxes(rs.DepositTaxes())
 		})
 
 }

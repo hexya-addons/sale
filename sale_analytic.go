@@ -25,13 +25,13 @@ func init() {
 				cond = q.AccountAnalyticLine().SoLine().In(rs).And().Amount().LowerOrEqual(0)
 			}
 			data := h.AccountAnalyticLine().Search(rs.Env(), cond).
-				GroupBy(h.AccountAnalyticLine().ProductUom(), h.AccountAnalyticLine().SoLine()).
-				Aggregates(h.AccountAnalyticLine().ProductUom(), h.AccountAnalyticLine().SoLine(),
-					h.AccountAnalyticLine().UnitAmount())
+				GroupBy(q.AccountAnalyticLine().ProductUom(), q.AccountAnalyticLine().SoLine()).
+				Aggregates(q.AccountAnalyticLine().ProductUom(), q.AccountAnalyticLine().SoLine(),
+					q.AccountAnalyticLine().UnitAmount())
 			for _, d := range data {
-				uom := d.Values.ProductUom
-				line := d.Values.SoLine
-				qty := d.Values.UnitAmount
+				uom := d.Values.ProductUom()
+				line := d.Values.SoLine()
+				qty := d.Values.UnitAmount()
 				if line.ProductUom().Category().Equals(uom.Category()) {
 					qty = uom.ComputeQuantity(qty, line.ProductUom(), true)
 				}
@@ -89,19 +89,17 @@ func init() {
 			}
 			taxes := fPos.MapTax(rs.Product().Taxes(), rs.Product(), order.Partner())
 
-			return &h.SaleOrderLineData{
-				Order:         order,
-				Name:          rs.Name(),
-				Sequence:      lastSequence,
-				PriceUnit:     price,
-				Tax:           taxes,
-				Discount:      0,
-				Product:       rs.Product(),
-				ProductUom:    rs.ProductUom(),
-				ProductUomQty: 0,
-				QtyDelivered:  rs.UnitAmount(),
-			}
-
+			return h.SaleOrderLine().NewData().
+				SetOrder(order).
+				SetName(rs.Name()).
+				SetSequence(lastSequence).
+				SetPriceUnit(price).
+				SetTax(taxes).
+				SetDiscount(0).
+				SetProduct(rs.Product()).
+				SetProductUom(rs.ProductUom()).
+				SetProductUomQty(0).
+				SetQtyDelivered(rs.UnitAmount())
 		})
 
 	h.AccountAnalyticLine().Methods().GetSaleOrderLine().DeclareMethod(
@@ -109,7 +107,7 @@ func init() {
 		Returned data is a modified copy of vals.`,
 		func(rs h.AccountAnalyticLineSet, vals *h.AccountAnalyticLineData) *h.AccountAnalyticLineData {
 			result := *vals
-			SOLine := result.SoLine
+			SOLine := result.SoLine()
 			if SOLine.IsEmpty() {
 				SOLine = rs.SoLine()
 			}
@@ -132,7 +130,7 @@ func init() {
 					And().PriceUnit().Equals(price).
 					And().Product().Equals(rs.Product()))
 			if !SOLines.IsEmpty() {
-				result.SoLine = SOLines.Records()[0]
+				result.SetSoLine(SOLines.Records()[0])
 				return &result
 			}
 			if order.State() != "sale" {
@@ -141,21 +139,21 @@ func init() {
 			orderLineVals := rs.GetSaleOrderLineVals(order, price)
 			NewSOLine := h.SaleOrderLine().Create(rs.Env(), orderLineVals)
 
-			NewSOLine.Write(NewSOLine.ComputeTax(), h.SaleOrderLine().Tax())
-			result.SoLine = NewSOLine
+			NewSOLine.Write(NewSOLine.ComputeTax())
+			result.SetSoLine(NewSOLine)
 
 			return &result
 		})
 
 	h.AccountAnalyticLine().Methods().Write().Extend("",
-		func(rs h.AccountAnalyticLineSet, data *h.AccountAnalyticLineData, fieldsToReset ...models.FieldNamer) bool {
+		func(rs h.AccountAnalyticLineSet, data *h.AccountAnalyticLineData) bool {
 			if rs.Env().Context().GetBool("create") {
-				return rs.Super().Write(data, fieldsToReset...)
+				return rs.Super().Write(data)
 			}
-			res := rs.Super().Write(data, fieldsToReset...)
+			res := rs.Super().Write(data)
 			for _, line := range rs.Records() {
 				vals := line.Sudo().GetSaleOrderLine(data)
-				rs.Super().Write(vals, h.AccountAnalyticLine().SoLine())
+				rs.Super().Write(vals)
 			}
 			SOLines := h.SaleOrderLine().NewSet(rs.Env())
 			for _, line := range rs.Records() {
@@ -166,10 +164,10 @@ func init() {
 		})
 
 	h.AccountAnalyticLine().Methods().Create().Extend("",
-		func(rs h.AccountAnalyticLineSet, data *h.AccountAnalyticLineData, fieldsToReset ...models.FieldNamer) h.AccountAnalyticLineSet {
+		func(rs h.AccountAnalyticLineSet, data *h.AccountAnalyticLineData) h.AccountAnalyticLineSet {
 			line := rs.Super().Create(data)
 			vals := line.Sudo().GetSaleOrderLine(data)
-			line.WithContext("create", true).Write(vals, h.AccountAnalyticLine().SoLine())
+			line.WithContext("create", true).Write(vals)
 			SOLines := h.SaleOrderLine().NewSet(rs.Env())
 			for _, l := range rs.Records() {
 				SOLines = SOLines.Union(l.SoLine())

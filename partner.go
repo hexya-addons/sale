@@ -26,9 +26,7 @@ func init() {
 		`ComputeSaleOrderCount`,
 		func(rs h.PartnerSet) *h.PartnerData {
 			count := h.SaleOrder().Search(rs.Env(), q.SaleOrder().Partner().ChildOf(rs)).SearchCount()
-			return &h.PartnerData{
-				SaleOrderCount: count,
-			}
+			return h.Partner().NewData().SetSaleOrderCount(count)
 		})
 
 }

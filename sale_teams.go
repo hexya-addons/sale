@@ -41,15 +41,13 @@ team estimates to be able to invoice this month.`},
 			amounts := h.SaleOrder().Search(rs.Env(),
 				q.SaleOrder().Team().Equals(rs).
 					And().InvoiceStatus().Equals("to invoice")).
-				GroupBy(h.SaleOrder().Team()).
-				Aggregates(h.SaleOrder().Team(), h.SaleOrder().AmountTotal())
+				GroupBy(q.SaleOrder().Team()).
+				Aggregates(q.SaleOrder().Team(), q.SaleOrder().AmountTotal())
 			if len(amounts) == 0 {
-				return &h.CRMTeamData{}
+				return h.CRMTeam().NewData()
 			}
-			amount := amounts[0].Values.AmountTotal
-			return &h.CRMTeamData{
-				SalesToInvoiceAmount: amount,
-			}
+			amount := amounts[0].Values.AmountTotal()
+			return h.CRMTeam().NewData().SetSalesToInvoiceAmount(amount)
 		})
 
 	h.CRMTeam().Methods().ComputeInvoiced().DeclareMethod(
@@ -63,40 +61,25 @@ team estimates to be able to invoice this month.`},
 					And().Date().LowerOrEqual(dates.Today()).
 					And().Date().GreaterOrEqual(firstDayOfMonth).
 					And().Type().In([]string{"out_invoice", "out_refund"})).
-				GroupBy(h.AccountInvoice().Team()).
-				Aggregates(h.AccountInvoice().Team(), h.AccountInvoice().AmountUntaxedSigned())
+				GroupBy(q.AccountInvoice().Team()).
+				Aggregates(q.AccountInvoice().Team(), q.AccountInvoice().AmountUntaxedSigned())
 			if len(invoices) == 0 {
-				return &h.CRMTeamData{}
+				return h.CRMTeam().NewData()
 			}
-			amount := invoices[0].Values.AmountUntaxedSigned
-			return &h.CRMTeamData{
-				Invoiced: amount,
-			}
+			amount := invoices[0].Values.AmountUntaxedSigned()
+			return h.CRMTeam().NewData().SetInvoiced(amount)
 		})
 
 	h.CRMTeam().Methods().UpdateInvoicedTarget().DeclareMethod(
 		`UpdateInvoicedTarget updates the invoice target with the given value`,
 		func(rs h.CRMTeamSet, value float64) bool {
-			return rs.Write(&h.CRMTeamData{
-				InvoicedTarget: nbutils.Round(value, 1),
-			}, h.CRMTeam().InvoicedTarget())
+			return rs.Write(h.CRMTeam().NewData().SetInvoicedTarget(nbutils.Round(value, 1)))
 		})
 
 	h.CRMTeam().Methods().OnchangeUseQuotation().DeclareMethod(
 		`OnchangeUseQuotation makes sure we use invoices if we use quotations.`,
-		func(rs h.CRMTeamSet) (*h.CRMTeamData, []models.FieldNamer) {
-			//@api.onchange('use_quotations')
-			/*def _onchange_use_quotation(self):
-			  if self.use_quotations:
-			      self.use_invoices = True
-			*/
-			var useInvoices bool
-			if rs.UseQuotations() {
-				useInvoices = true
-			}
-			return &h.CRMTeamData{
-				UseInvoices: useInvoices,
-			}, []models.FieldNamer{h.CRMTeam().UseInvoices()}
+		func(rs h.CRMTeamSet) *h.CRMTeamData {
+			return h.CRMTeam().NewData().SetUseInvoices(rs.UseQuotations())
 		})
 
 }

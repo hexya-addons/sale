@@ -48,9 +48,7 @@ Delivered Quantity: Invoiced based on the quantity the vendor delivered (time or
 			for _, product := range rs.ProductVariants().Records() {
 				count += product.SalesCount()
 			}
-			return &h.ProductTemplateData{
-				SalesCount: count,
-			}
+			return h.ProductTemplate().NewData().SetSalesCount(count)
 		})
 
 	h.ProductTemplate().Methods().ActionViewSales().DeclareMethod(

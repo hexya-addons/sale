@@ -6,6 +6,7 @@ package sale
 import (
 	"github.com/hexya-erp/hexya/src/models"
 	"github.com/hexya-erp/pool/h"
+	"github.com/hexya-erp/pool/q"
 )
 
 func init() {
@@ -35,19 +36,16 @@ func init() {
 	h.AccountInvoice().Methods().OnchangePartnerShipping().DeclareMethod(
 		`OnchangePartnerShipping triggers the change of fiscal position
 		when the shipping address is modified.`,
-		func(rs h.AccountInvoiceSet) (*h.AccountInvoiceData, []models.FieldNamer) {
+		func(rs h.AccountInvoiceSet) *h.AccountInvoiceData {
 			fiscalPosition := h.AccountFiscalPosition().NewSet(rs.Env()).GetFiscalPosition(rs.Partner(), rs.PartnerShipping())
-			return &h.AccountInvoiceData{
-				FiscalPosition: fiscalPosition,
-			}, []models.FieldNamer{h.AccountInvoice().FiscalPosition()}
+			return h.AccountInvoice().NewData().SetFiscalPosition(fiscalPosition)
 		})
 
 	h.AccountInvoice().Methods().OnchangePartner().Extend("",
-		func(rs h.AccountInvoiceSet) (*h.AccountInvoiceData, []models.FieldNamer) {
-			data, fields := rs.Super().OnchangePartner()
-			data.PartnerShipping = rs.Partner().AddressGet([]string{"delivery"})["delivery"]
-			fields = append(fields, h.AccountInvoice().PartnerShipping())
-			return data, fields
+		func(rs h.AccountInvoiceSet) *h.AccountInvoiceData {
+			data := rs.Super().OnchangePartner()
+			data.SetPartnerShipping(rs.Partner().AddressGet([]string{"delivery"})["delivery"])
+			return data
 		})
 
 	//h.AccountInvoice().Methods().ActionInvoicePaid().Extend("",
@@ -111,7 +109,7 @@ func init() {
 	h.AccountInvoice().Methods().GetRefundCommonFields().Extend("",
 		func(rs h.AccountInvoiceSet) []models.FieldNamer {
 			return append(rs.Super().GetRefundCommonFields(),
-				h.AccountInvoice().Team(), h.AccountInvoice().PartnerShipping())
+				q.AccountInvoice().Team(), q.AccountInvoice().PartnerShipping())
 		})
 
 	h.AccountInvoiceLine().SetDefaultOrder("Invoice", "LayoutCategory", "Sequence", "ID")

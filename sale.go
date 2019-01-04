@@ -153,11 +153,10 @@ based on the template if online quotation is installed.`},
 					amountTaxed += line.PriceTax()
 				}
 			}
-			return &h.SaleOrderData{
-				AmountUntaxed: rs.Pricelist().Currency().Round(amountUntaxed),
-				AmountTax:     rs.Pricelist().Currency().Round(amountTaxed),
-				AmountTotal:   amountTaxed + amountUntaxed,
-			}
+			return h.SaleOrder().NewData().
+				SetAmountUntaxed(rs.Pricelist().Currency().Round(amountUntaxed)).
+				SetAmountTax(rs.Pricelist().Currency().Round(amountTaxed)).
+				SetAmountTotal(amountTaxed + amountUntaxed)
 		})
 
 	h.SaleOrder().Methods().GetInvoiced().DeclareMethod(
@@ -223,16 +222,15 @@ based on the template if online quotation is installed.`},
 			default:
 				invoiceStatus = "no"
 			}
-			return &h.SaleOrderData{
-				InvoiceCount:  invoices.Union(refunds).Len(),
-				Invoices:      invoices.Union(refunds),
-				InvoiceStatus: invoiceStatus,
-			}
+			return h.SaleOrder().NewData().
+				SetInvoiceCount(invoices.Union(refunds).Len()).
+				SetInvoices(invoices.Union(refunds)).
+				SetInvoiceStatus(invoiceStatus)
 		})
 
 	h.SaleOrder().Methods().ComputeTax().DeclareMethod(
 		`ComputeTax triggers the recompute of the taxes if the fiscal position is changed on the SO.`,
-		func(rs h.SaleOrderSet) (*h.SaleOrderData, []models.FieldNamer) {
+		func(rs h.SaleOrderSet) *h.SaleOrderData {
 			//@api.onchange('fiscal_position_id')
 			/*def _compute_tax_id(self):
 			  """
@@ -242,7 +240,7 @@ based on the template if online quotation is installed.`},
 			      order.order_line._compute_tax_id()
 			*/
 			// TODO : need to implement onchange on relation fields first
-			return &h.SaleOrderData{}, []models.FieldNamer{}
+			return h.SaleOrder().NewData()
 		})
 
 	h.SaleOrder().Methods().GetCustomerLead().DeclareMethod(
@@ -284,10 +282,9 @@ based on the template if online quotation is installed.`},
 
 	h.SaleOrder().Methods().OnchangePartnerShipping().DeclareMethod(
 		`OnchangePartnerShipping triggers the change of fiscal position when the shipping address is modified.`,
-		func(rs h.SaleOrderSet) (*h.SaleOrderData, []models.FieldNamer) {
-			return &h.SaleOrderData{
-				FiscalPosition: h.AccountFiscalPosition().NewSet(rs.Env()).GetFiscalPosition(rs.Partner(), rs.PartnerShipping()),
-			}, []models.FieldNamer{h.SaleOrder().FiscalPosition()}
+		func(rs h.SaleOrderSet) *h.SaleOrderData {
+			return h.SaleOrder().NewData().SetFiscalPosition(
+				h.AccountFiscalPosition().NewSet(rs.Env()).GetFiscalPosition(rs.Partner(), rs.PartnerShipping()))
 		})
 
 	h.SaleOrder().Methods().OnchangePartner().DeclareMethod(
@@ -297,47 +294,31 @@ based on the template if online quotation is installed.`},
 		- Invoice address
 		- Delivery address
 		`,
-		func(rs h.SaleOrderSet) (*h.SaleOrderData, []models.FieldNamer) {
+		func(rs h.SaleOrderSet) *h.SaleOrderData {
 			if rs.Partner().IsEmpty() {
-				return &h.SaleOrderData{
-						PartnerInvoice:  h.Partner().NewSet(rs.Env()),
-						PartnerShipping: h.Partner().NewSet(rs.Env()),
-						PaymentTerm:     h.AccountPaymentTerm().NewSet(rs.Env()),
-						FiscalPosition:  h.AccountFiscalPosition().NewSet(rs.Env()),
-					}, []models.FieldNamer{
-						h.SaleOrder().PartnerInvoice(),
-						h.SaleOrder().PartnerShipping(),
-						h.SaleOrder().PaymentTerm(),
-						h.SaleOrder().FiscalPosition(),
-					}
+				return h.SaleOrder().NewData().
+					SetPartnerInvoice(h.Partner().NewSet(rs.Env())).
+					SetPartnerShipping(h.Partner().NewSet(rs.Env())).
+					SetPaymentTerm(h.AccountPaymentTerm().NewSet(rs.Env())).
+					SetFiscalPosition(h.AccountFiscalPosition().NewSet(rs.Env()))
 			}
 			addr := rs.Partner().AddressGet([]string{"delivery", "invoice"})
-			values := &h.SaleOrderData{
-				Pricelist:       rs.Partner().PropertyProductPricelist(),
-				PaymentTerm:     rs.Partner().PropertyPaymentTerm(),
-				PartnerInvoice:  addr["invoice"],
-				PartnerShipping: addr["delivery"],
-			}
-			fields := []models.FieldNamer{
-				h.SaleOrder().PartnerInvoice(),
-				h.SaleOrder().PartnerShipping(),
-				h.SaleOrder().PaymentTerm(),
-				h.SaleOrder().Pricelist(),
-			}
+			values := h.SaleOrder().NewData().
+				SetPricelist(rs.Partner().PropertyProductPricelist()).
+				SetPaymentTerm(rs.Partner().PropertyPaymentTerm()).
+				SetPartnerInvoice(addr["invoice"]).
+				SetPartnerShipping(addr["delivery"])
 			if h.User().NewSet(rs.Env()).CurrentUser().Company().SaleNote() != "" {
-				values.Note = h.User().NewSet(rs.Env()).WithContext("lang", rs.Partner().Lang()).
-					CurrentUser().Company().SaleNote()
-				fields = append(fields, h.SaleOrder().Note())
+				values.SetNote(h.User().NewSet(rs.Env()).WithContext("lang", rs.Partner().Lang()).
+					CurrentUser().Company().SaleNote())
 			}
 			if !rs.Partner().User().IsEmpty() {
-				values.User = rs.Partner().User()
-				fields = append(fields, h.SaleOrder().User())
+				values.SetUser(rs.Partner().User())
 			}
 			if !rs.Partner().Team().IsEmpty() {
-				values.Team = rs.Partner().Team()
-				fields = append(fields, h.SaleOrder().Team())
+				values.SetTeam(rs.Partner().Team())
 			}
-			return values, fields
+			return values
 		})
 
 	//h.SaleOrder().Methods().OnchangePartnerWarning().DeclareMethod(
@@ -378,28 +359,28 @@ based on the template if online quotation is installed.`},
 	//	})
 
 	h.SaleOrder().Methods().Create().Extend("",
-		func(rs h.SaleOrderSet, data *h.SaleOrderData, fieldsToReset ...models.FieldNamer) h.SaleOrderSet {
-			if data.Name == "" || data.Name == rs.T("New") {
+		func(rs h.SaleOrderSet, data *h.SaleOrderData) h.SaleOrderSet {
+			if data.Name() == "" || data.Name() == rs.T("New") {
 				seq := h.Sequence().NewSet(rs.Env())
-				if !data.Company.IsEmpty() {
-					seq = seq.WithContext("force_company", data.Company.ID())
+				if !data.Company().IsEmpty() {
+					seq = seq.WithContext("force_company", data.Company().ID())
 				}
-				data.Name = rs.T("New")
+				data.SetName(rs.T("New"))
 				seqValue := seq.NextByCode("sale.order")
 				if seqValue != "" {
-					data.Name = seqValue
+					data.SetName(seqValue)
 				}
 			}
 			// Makes sure PartnerInvoice, PartnerShipping and Pricelist are defined
-			addr := data.Partner.AddressGet([]string{"delivery", "invoice"})
-			if data.PartnerInvoice.IsEmpty() {
-				data.PartnerInvoice = addr["invoice"]
+			addr := data.Partner().AddressGet([]string{"delivery", "invoice"})
+			if data.PartnerInvoice().IsEmpty() {
+				data.SetPartnerInvoice(addr["invoice"])
 			}
-			if data.PartnerShipping.IsEmpty() {
-				data.PartnerShipping = addr["delivery"]
+			if data.PartnerShipping().IsEmpty() {
+				data.SetPartnerShipping(addr["delivery"])
 			}
-			if data.Pricelist.IsEmpty() {
-				data.Pricelist = data.Partner.PropertyProductPricelist()
+			if data.Pricelist().IsEmpty() {
+				data.SetPricelist(data.Partner().PropertyProductPricelist())
 			}
 			return rs.Super().Create(data)
 		})
@@ -418,22 +399,21 @@ based on the template if online quotation is installed.`},
 			if !rs.FiscalPosition().IsEmpty() {
 				fPos = rs.FiscalPosition()
 			}
-			invoiceVals := &h.AccountInvoiceData{
-				Name:            rs.ClientOrderRef(),
-				Origin:          rs.Name(),
-				Type:            "out_invoice",
-				Account:         rs.PartnerInvoice().PropertyAccountReceivable(),
-				Partner:         rs.PartnerInvoice(),
-				PartnerShipping: rs.PartnerShipping(),
-				Journal:         journal,
-				Currency:        rs.Pricelist().Currency(),
-				Comment:         rs.Note(),
-				PaymentTerm:     rs.PaymentTerm(),
-				FiscalPosition:  fPos,
-				Company:         rs.Company(),
-				User:            rs.User(),
-				Team:            rs.Team(),
-			}
+			invoiceVals := h.AccountInvoice().NewData().
+				SetName(rs.ClientOrderRef()).
+				SetOrigin(rs.Name()).
+				SetType("out_invoice").
+				SetAccount(rs.PartnerInvoice().PropertyAccountReceivable()).
+				SetPartner(rs.PartnerInvoice()).
+				SetPartnerShipping(rs.PartnerShipping()).
+				SetJournal(journal).
+				SetCurrency(rs.Pricelist().Currency()).
+				SetComment(rs.Note()).
+				SetPaymentTerm(rs.PaymentTerm()).
+				SetFiscalPosition(fPos).
+				SetCompany(rs.Company()).
+				SetUser(rs.User()).
+				SetTeam(rs.Team())
 			return invoiceVals
 		})
 
@@ -525,7 +505,7 @@ based on the template if online quotation is installed.`},
 							}
 						}
 						if !inOrigins {
-							vals.Origin = invoices[groupKey].Origin() + ", " + order.Name()
+							vals.SetOrigin(invoices[groupKey].Origin() + ", " + order.Name())
 						}
 						names := strings.Split(invoices[groupKey].Name(), ", ")
 						var inNames bool
@@ -536,7 +516,7 @@ based on the template if online quotation is installed.`},
 							}
 						}
 						if !inNames && order.ClientOrderRef() != "" {
-							vals.Name = invoices[groupKey].Name() + ", " + order.ClientOrderRef()
+							vals.SetName(invoices[groupKey].Name() + ", " + order.ClientOrderRef())
 						}
 					}
 					if line.QtyToInvoice() > 0 || (line.QtyToInvoice() < 0 && final) {
@@ -590,10 +570,9 @@ based on the template if online quotation is installed.`},
 				}
 				orders = orders.Union(order)
 			}
-			orders.Write(&h.SaleOrderData{
-				State:            "draft",
-				ProcurementGroup: h.ProcurementGroup().NewSet(rs.Env()),
-			})
+			orders.Write(h.SaleOrder().NewData().
+				SetState("draft").
+				SetProcurementGroup(h.ProcurementGroup().NewSet(rs.Env())))
 			for _, order := range orders.Records() {
 				for _, line := range order.OrderLine().Records() {
 					for _, proc := range line.Procurements().Records() {
@@ -688,19 +667,16 @@ based on the template if online quotation is installed.`},
 		`PrepareProcurementGroup returns the data that will be used to create the
 		procurement group of this sale order`,
 		func(rs h.SaleOrderSet) *h.ProcurementGroupData {
-			return &h.ProcurementGroupData{
-				Name: rs.Name(),
-			}
+			return h.ProcurementGroup().NewData().SetName(rs.Name())
 		})
 
 	h.SaleOrder().Methods().ActionConfirm().DeclareMethod(
 		`ActionConfirm confirms this quotation into a sale order`,
 		func(rs h.SaleOrderSet) bool {
 			for _, order := range rs.Records() {
-				order.Write(&h.SaleOrderData{
-					State:            "sale",
-					ConfirmationDate: dates.Now(),
-				})
+				order.Write(h.SaleOrder().NewData().
+					SetState("sale").
+					SetConfirmationDate(dates.Now()))
 				if rs.Env().Context().HasKey("send_email") {
 					rs.ForceQuotationSend()
 				}
@@ -721,12 +697,11 @@ based on the template if online quotation is installed.`},
 				if prefix != "" {
 					name = fmt.Sprintf("%s: %s", prefix, order.Name())
 				}
-				analyticAccount := h.AccountAnalyticAccount().Create(rs.Env(), &h.AccountAnalyticAccountData{
-					Name:    name,
-					Code:    order.ClientOrderRef(),
-					Company: order.Company(),
-					Partner: order.Partner(),
-				})
+				analyticAccount := h.AccountAnalyticAccount().Create(rs.Env(), h.AccountAnalyticAccount().NewData().
+					SetName(name).
+					SetCode(order.ClientOrderRef()).
+					SetCompany(order.Company()).
+					SetPartner(order.Partner()))
 				order.SetProject(analyticAccount)
 			}
 		})
@@ -921,9 +896,7 @@ based on the template if online quotation is installed.`},
 					invoiceStatus = "no"
 				}
 			}
-			return &h.SaleOrderLineData{
-				InvoiceStatus: invoiceStatus,
-			}
+			return h.SaleOrderLine().NewData().SetInvoiceStatus(invoiceStatus)
 		})
 
 	h.SaleOrderLine().Methods().ComputeAmount().DeclareMethod(
@@ -931,20 +904,17 @@ based on the template if online quotation is installed.`},
 		func(rs h.SaleOrderLineSet) *h.SaleOrderLineData {
 			price := rs.PriceUnit() * (1 - rs.Discount()/100)
 			_, totalExcluded, totalIncluded, _ := rs.Tax().ComputeAll(price, rs.Order().Currency(), rs.ProductUomQty(), rs.Product(), rs.Order().PartnerShipping())
-			return &h.SaleOrderLineData{
-				PriceTax:      totalIncluded - totalExcluded,
-				PriceTotal:    totalIncluded,
-				PriceSubtotal: totalExcluded,
-			}
+			return h.SaleOrderLine().NewData().
+				SetPriceTax(totalIncluded - totalExcluded).
+				SetPriceTotal(totalIncluded).
+				SetPriceSubtotal(totalExcluded)
 		})
 
 	h.SaleOrderLine().Methods().ComputeQtyDeliveredUpdateable().DeclareMethod(
 		`ComputeQtyDeliveredUpdateable checks if the delivered quantity can be updated`,
 		func(rs h.SaleOrderLineSet) *h.SaleOrderLineData {
 			qtyDeliveredUpdateable := rs.Order().State() == "sale" && rs.Product().TrackService() == "manual" && rs.Product().ExpensePolicy() == "no"
-			return &h.SaleOrderLineData{
-				QtyDeliveredUpdateable: qtyDeliveredUpdateable,
-			}
+			return h.SaleOrderLine().NewData().SetQtyDeliveredUpdateable(qtyDeliveredUpdateable)
 		})
 
 	h.SaleOrderLine().Methods().GetToInvoiceQty().DeclareMethod(
@@ -953,15 +923,14 @@ based on the template if online quotation is installed.`},
 		delivered is used.`,
 		func(rs h.SaleOrderLineSet) *h.SaleOrderLineData {
 			if rs.Order().State() != "sale" && rs.Order().State() != "done" {
-				return &h.SaleOrderLineData{}
+				return h.SaleOrderLine().NewData()
 			}
 			qtyToInvoice := rs.QtyDelivered() - rs.QtyInvoiced()
 			if rs.Product().InvoicePolicy() == "order" {
 				qtyToInvoice = rs.ProductUomQty() - rs.QtyInvoiced()
 			}
-			return &h.SaleOrderLineData{
-				QtyToInvoice: qtyToInvoice,
-			}
+			return h.SaleOrderLine().NewData().
+				SetQtyToInvoice(qtyToInvoice)
 		})
 
 	h.SaleOrderLine().Methods().GetInvoiceQty().DeclareMethod(
@@ -982,17 +951,13 @@ based on the template if online quotation is installed.`},
 					qtyInvoiced -= invoiceLine.Uom().ComputeQuantity(invoiceLine.Quantity(), rs.ProductUom(), true)
 				}
 			}
-			return &h.SaleOrderLineData{
-				QtyInvoiced: qtyInvoiced,
-			}
+			return h.SaleOrderLine().NewData().SetQtyInvoiced(qtyInvoiced)
 		})
 
 	h.SaleOrderLine().Methods().GetPriceReduce().DeclareMethod(
 		`GetPriceReduce computes the unit price with discount.`,
 		func(rs h.SaleOrderLineSet) *h.SaleOrderLineData {
-			return &h.SaleOrderLineData{
-				PriceReduce: rs.PriceUnit() * (1 - rs.Discount()/100),
-			}
+			return h.SaleOrderLine().NewData().SetPriceReduce(rs.PriceUnit() * (1 - rs.Discount()/100))
 		})
 
 	h.SaleOrderLine().Methods().GetPriceReduceTax().DeclareMethod(
@@ -1002,9 +967,7 @@ based on the template if online quotation is installed.`},
 			if rs.ProductUomQty() != 0 {
 				price = rs.PriceTotal() / rs.ProductUomQty()
 			}
-			return &h.SaleOrderLineData{
-				PriceReduceTaxInc: price,
-			}
+			return h.SaleOrderLine().NewData().SetPriceReduceTaxInc(price)
 		})
 
 	h.SaleOrderLine().Methods().GetPriceReduceNotax().DeclareMethod(
@@ -1014,10 +977,7 @@ based on the template if online quotation is installed.`},
 			if rs.ProductUomQty() != 0 {
 				price = rs.PriceSubtotal() / rs.ProductUomQty()
 			}
-			return &h.SaleOrderLineData{
-				PriceReduceTaxExcl: price,
-			}
-
+			return h.SaleOrderLine().NewData().SetPriceReduceTaxExcl(price)
 		})
 
 	h.SaleOrderLine().Methods().ComputeTax().DeclareMethod(
@@ -1035,27 +995,23 @@ based on the template if online quotation is installed.`},
 			if !fPos.IsEmpty() {
 				taxes = fPos.MapTax(taxes, rs.Product(), rs.Order().PartnerShipping())
 			}
-			return &h.SaleOrderLineData{
-				Tax: taxes,
-			}
+			return h.SaleOrderLine().NewData().SetTax(taxes)
 		})
 
 	h.SaleOrderLine().Methods().PrepareOrderLineProcurement().DeclareMethod(
 		`PrepareOrderLineProcurement returns the data to create the procurement of this sale order line.`,
 		func(rs h.SaleOrderLineSet, group h.ProcurementGroupSet) *h.ProcurementOrderData {
 			rs.EnsureOne()
-			return &h.ProcurementOrderData{
-				Name:        rs.Name(),
-				Origin:      rs.Order().Name(),
-				DatePlanned: rs.Order().DateOrder().AddDate(0, 0, rs.CustomerLead()),
-				Product:     rs.Product(),
-				ProductQty:  rs.ProductUomQty(),
-				ProductUom:  rs.ProductUom(),
-				Company:     rs.Company(),
-				Group:       group,
-				SaleLine:    rs,
-			}
-
+			return h.ProcurementOrder().NewData().
+				SetName(rs.Name()).
+				SetOrigin(rs.Order().Name()).
+				SetDatePlanned(rs.Order().DateOrder().AddDate(0, 0, rs.CustomerLead())).
+				SetProduct(rs.Product()).
+				SetProductQty(rs.ProductUomQty()).
+				SetProductUom(rs.ProductUom()).
+				SetCompany(rs.Company()).
+				SetGroup(group).
+				SetSaleLine(rs)
 		})
 
 	h.SaleOrderLine().Methods().ActionProcurementCreate().DeclareMethod(
@@ -1076,7 +1032,7 @@ based on the template if online quotation is installed.`},
 					continue
 				}
 				vals := line.PrepareOrderLineProcurement(line.Order().ProcurementGroup())
-				vals.ProductQty = line.ProductUomQty() - qty
+				vals.SetProductQty(line.ProductUomQty() - qty)
 				newProc := h.ProcurementOrder().NewSet(rs.Env()).WithContext("procurement_autorun_defer", true).Create(vals)
 				//new_proc.message_post_with_view('mail.message_origin_link',
 				//    values={'self': new_proc, 'origin': line.order_id},
@@ -1090,7 +1046,7 @@ based on the template if online quotation is installed.`},
 	h.SaleOrderLine().Methods().PrepareAddMissingFields().DeclareMethod(
 		`PrepareAddMissingFields deduces missing required fields from the onchange`,
 		func(rs h.SaleOrderLineSet, values *h.SaleOrderLineData) *h.SaleOrderLineData {
-			if !values.Order.IsEmpty() && !values.Product.IsEmpty() {
+			if !values.Order().IsEmpty() && !values.Product().IsEmpty() {
 				// line := h.SaleOrderLine().New(rs.Env(), values)
 				// data, _ = line.ProductChange()
 				// values = values.Update(data)
@@ -1100,7 +1056,7 @@ based on the template if online quotation is installed.`},
 		})
 
 	h.SaleOrderLine().Methods().Create().Extend("",
-		func(rs h.SaleOrderLineSet, data *h.SaleOrderLineData, fieldsToReset ...models.FieldNamer) h.SaleOrderLineSet {
+		func(rs h.SaleOrderLineSet, data *h.SaleOrderLineData) h.SaleOrderLineSet {
 			data = rs.PrepareAddMissingFields(data)
 			line := rs.Super().Create(data)
 			if line.Order().State() == "sale" {
@@ -1112,12 +1068,12 @@ based on the template if online quotation is installed.`},
 		})
 
 	h.SaleOrderLine().Methods().Write().Extend("",
-		func(rs h.SaleOrderLineSet, data *h.SaleOrderLineData, fieldsToReset ...models.FieldNamer) bool {
+		func(rs h.SaleOrderLineSet, data *h.SaleOrderLineData) bool {
 			lines := h.SaleOrderLine().NewSet(rs.Env())
 			changedLines := h.SaleOrderLine().NewSet(rs.Env())
-			if _, ok := data.Get(h.SaleOrderLine().ProductUomQty()); ok {
-				lines = rs.Search(q.SaleOrderLine().State().Equals("sale").And().ProductUomQty().Lower(data.ProductUomQty))
-				changedLines = rs.Search(q.SaleOrderLine().State().Equals("sale").And().ProductUomQty().NotEquals(data.ProductUomQty))
+			if data.HasProductUomQty() {
+				lines = rs.Search(q.SaleOrderLine().State().Equals("sale").And().ProductUomQty().Lower(data.ProductUomQty()))
+				changedLines = rs.Search(q.SaleOrderLine().State().Equals("sale").And().ProductUomQty().NotEquals(data.ProductUomQty()))
 				if !changedLines.IsEmpty() {
 					/*
 						orders = self.mapped('order_id')
@@ -1138,7 +1094,7 @@ based on the template if online quotation is installed.`},
 					*/
 				}
 			}
-			res := rs.Super().Write(data, fieldsToReset...)
+			res := rs.Super().Write(data)
 			if !lines.IsEmpty() {
 				lines.ActionProcurementCreate()
 			}
@@ -1164,21 +1120,20 @@ based on the template if online quotation is installed.`},
 			if !fPos.IsEmpty() {
 				account = fPos.MapAccount(account)
 			}
-			return &h.AccountInvoiceLineData{
-				Name:             rs.Name(),
-				Sequence:         rs.Sequence(),
-				Origin:           rs.Order().Name(),
-				Account:          account,
-				PriceUnit:        rs.PriceUnit(),
-				Quantity:         qty,
-				Discount:         rs.Discount(),
-				Uom:              rs.ProductUom(),
-				Product:          rs.Product(),
-				LayoutCategory:   rs.LayoutCategory(),
-				InvoiceLineTaxes: rs.Tax(),
-				AccountAnalytic:  rs.Order().Project(),
-				AnalyticTags:     rs.AnalyticTags(),
-			}
+			return h.AccountInvoiceLine().NewData().
+				SetName(rs.Name()).
+				SetSequence(rs.Sequence()).
+				SetOrigin(rs.Order().Name()).
+				SetAccount(account).
+				SetPriceUnit(rs.PriceUnit()).
+				SetQuantity(qty).
+				SetDiscount(rs.Discount()).
+				SetUom(rs.ProductUom()).
+				SetProduct(rs.Product()).
+				SetLayoutCategory(rs.LayoutCategory()).
+				SetInvoiceLineTaxes(rs.Tax()).
+				SetAccountAnalytic(rs.Order().Project()).
+				SetAnalyticTags(rs.AnalyticTags())
 		})
 
 	h.SaleOrderLine().Methods().InvoiceLineCreate().DeclareMethod(
@@ -1191,8 +1146,8 @@ based on the template if online quotation is installed.`},
 					continue
 				}
 				vals := line.PrepareInvoiceLine(qty)
-				vals.Invoice = invoice
-				vals.SaleLines = line
+				vals.SetInvoice(invoice)
+				vals.SetSaleLines(line)
 				h.AccountInvoiceLine().Create(rs.Env(), vals)
 			}
 		})
@@ -1222,17 +1177,15 @@ based on the template if online quotation is installed.`},
 
 	h.SaleOrderLine().Methods().ProductChange().DeclareMethod(
 		`ProductChange updates data when product is changed in the user interface.`,
-		func(rs h.SaleOrderLineSet) (*h.SaleOrderLineData, []models.FieldNamer) {
+		func(rs h.SaleOrderLineSet) *h.SaleOrderLineData {
 			if rs.Product().IsEmpty() {
-				return &h.SaleOrderLineData{}, []models.FieldNamer{}
+				return h.SaleOrderLine().NewData()
 			}
 			qty := rs.ProductUomQty()
 			data := rs.ComputeTax()
-			fields := []models.FieldNamer{h.SaleOrderLine().Tax()}
 			if rs.ProductUom().IsEmpty() || rs.Product().Uom() != rs.ProductUom() {
-				data.ProductUom = rs.Product().Uom()
-				data.ProductUomQty = 1
-				fields = append(fields, h.SaleOrderLine().ProductUom(), h.SaleOrderLine().ProductUomQty())
+				data.SetProductUom(rs.Product().Uom())
+				data.SetProductUomQty(1)
 				qty = 1
 			}
 			product := rs.Product().
@@ -1247,25 +1200,23 @@ based on the template if online quotation is installed.`},
 			if product.DescriptionSale() != "" {
 				name += "\n" + product.DescriptionSale()
 			}
-			data.Name = name
-			fields = append(fields, h.SaleOrderLine().Name())
+			data.SetName(name)
 			if !rs.Order().Pricelist().IsEmpty() && !rs.Order().Partner().IsEmpty() {
-				data.PriceUnit = h.AccountTax().NewSet(rs.Env()).FixTaxIncludedPrice(rs.GetDisplayPrice(product),
-					product.Taxes(), rs.Tax())
-				fields = append(fields, h.SaleOrderLine().PriceUnit())
+				data.SetPriceUnit(h.AccountTax().NewSet(rs.Env()).FixTaxIncludedPrice(rs.GetDisplayPrice(product),
+					product.Taxes(), rs.Tax()))
 			}
-			return rs.UpdateOnchangeDiscount(data, fields)
+			return rs.UpdateOnchangeDiscount(data)
 			// TODO Add messages and domains when implemented
 		})
 
 	h.SaleOrderLine().Methods().ProductUomChange().DeclareMethod(
 		`ProductUomChange updates data when quantity or unit of measure is changed in the user interface.`,
-		func(rs h.SaleOrderLineSet) (*h.SaleOrderLineData, []models.FieldNamer) {
+		func(rs h.SaleOrderLineSet) *h.SaleOrderLineData {
 			if rs.ProductUom().IsEmpty() || rs.Product().IsEmpty() {
-				return &h.SaleOrderLineData{}, []models.FieldNamer{h.SaleOrderLine().PriceUnit()}
+				return h.SaleOrderLine().NewData()
 			}
 			if rs.Order().Pricelist().IsEmpty() || !rs.Order().Partner().IsEmpty() {
-				return &h.SaleOrderLineData{}, []models.FieldNamer{}
+				return h.SaleOrderLine().NewData()
 			}
 			product := rs.Product().
 				WithContext("lang", rs.Order().Partner().Lang()).
@@ -1275,12 +1226,10 @@ based on the template if online quotation is installed.`},
 				WithContext("pricelist", rs.Order().Pricelist()).
 				WithContext("uom", rs.ProductUom()).
 				WithContext("fiscal_position", rs.Env().Context().GetInteger("fiscal_position"))
-			data := &h.SaleOrderLineData{
-				PriceUnit: h.AccountTax().NewSet(rs.Env()).FixTaxIncludedPrice(rs.GetDisplayPrice(product),
-					product.Taxes(), rs.Tax()),
-			}
-			fields := []models.FieldNamer{h.SaleOrderLine().PriceUnit()}
-			return rs.UpdateOnchangeDiscount(data, fields)
+			data := h.SaleOrderLine().NewData().SetPriceUnit(
+				h.AccountTax().NewSet(rs.Env()).FixTaxIncludedPrice(rs.GetDisplayPrice(product),
+					product.Taxes(), rs.Tax()))
+			return rs.UpdateOnchangeDiscount(data)
 		})
 
 	h.SaleOrderLine().Methods().Unlink().Extend("",
@@ -1400,19 +1349,18 @@ based on the template if online quotation is installed.`},
 
 	h.SaleOrderLine().Methods().OnchangeDiscount().DeclareMethod(
 		`OnchangeDiscount`,
-		func(rs h.SaleOrderLineSet) (*h.SaleOrderLineData, []models.FieldNamer) {
-			return rs.UpdateOnchangeDiscount(&h.SaleOrderLineData{}, []models.FieldNamer{})
+		func(rs h.SaleOrderLineSet) *h.SaleOrderLineData {
+			return rs.UpdateOnchangeDiscount(h.SaleOrderLine().NewData())
 		})
 
 	h.SaleOrderLine().Methods().UpdateOnchangeDiscount().DeclareMethod(
 		`UpdateOnchangeDiscount updates the given data and fields with the discount business logic.`,
-		func(rs h.SaleOrderLineSet, data *h.SaleOrderLineData, fields []models.FieldNamer) (*h.SaleOrderLineData, []models.FieldNamer) {
-			data.Discount = 0
-			fields = append(fields, h.SaleOrderLine().Discount())
+		func(rs h.SaleOrderLineSet, data *h.SaleOrderLineData) *h.SaleOrderLineData {
+			data.SetDiscount(0)
 			if rs.Product().IsEmpty() || rs.ProductUom().IsEmpty() || rs.Order().Partner().IsEmpty() ||
 				rs.Order().Pricelist().IsEmpty() || rs.Order().Pricelist().DiscountPolicy() != "without_discount" ||
 				!h.User().NewSet(rs.Env()).CurrentUser().HasGroup("sale_group_discount_per_so_line") {
-				return data, fields
+				return data
 			}
 			qty := float64(1)
 			if rs.ProductUomQty() != 0 {
@@ -1424,7 +1372,7 @@ based on the template if online quotation is installed.`},
 				WithContext("date", rs.Order().DateOrder().ToDate()).
 				GetRealPriceCurrency(rs.Product(), rule, rs.ProductUomQty(), rs.ProductUom(), rs.Order().Pricelist())
 			if newListPrice == 0 {
-				return data, fields
+				return data
 			}
 			if !rs.Order().Pricelist().Currency().Equals(currency) {
 				// we need new_list_price in the same currency as price, which is in the SO's pricelist's currency
@@ -1434,9 +1382,9 @@ based on the template if online quotation is installed.`},
 			}
 			discount := (newListPrice - price) / newListPrice * 100
 			if discount > 0 {
-				data.Discount = discount
+				data.SetDiscount(discount)
 			}
-			return data, fields
+			return data
 		})
 
 }
