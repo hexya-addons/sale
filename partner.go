@@ -7,6 +7,7 @@ import (
 	"github.com/hexya-addons/base"
 	"github.com/hexya-erp/hexya/src/models"
 	"github.com/hexya-erp/pool/h"
+	"github.com/hexya-erp/pool/m"
 	"github.com/hexya-erp/pool/q"
 )
 
@@ -24,7 +25,7 @@ func init() {
 
 	h.Partner().Methods().ComputeSaleOrderCount().DeclareMethod(
 		`ComputeSaleOrderCount`,
-		func(rs h.PartnerSet) *h.PartnerData {
+		func(rs m.PartnerSet) m.PartnerData {
 			count := h.SaleOrder().Search(rs.Env(), q.SaleOrder().Partner().ChildOf(rs)).SearchCount()
 			return h.Partner().NewData().SetSaleOrderCount(count)
 		})

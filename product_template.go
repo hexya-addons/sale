@@ -11,6 +11,7 @@ import (
 	"github.com/hexya-erp/hexya/src/models"
 	"github.com/hexya-erp/hexya/src/models/types"
 	"github.com/hexya-erp/pool/h"
+	"github.com/hexya-erp/pool/m"
 )
 
 func init() {
@@ -43,7 +44,7 @@ Delivered Quantity: Invoiced based on the quantity the vendor delivered (time or
 
 	h.ProductTemplate().Methods().ComputeSalesCount().DeclareMethod(
 		`ComputeSalesCount returns the number of sales for this product template.`,
-		func(rs h.ProductTemplateSet) *h.ProductTemplateData {
+		func(rs m.ProductTemplateSet) m.ProductTemplateData {
 			var count int
 			for _, product := range rs.ProductVariants().Records() {
 				count += product.SalesCount()
@@ -53,7 +54,7 @@ Delivered Quantity: Invoiced based on the quantity the vendor delivered (time or
 
 	h.ProductTemplate().Methods().ActionViewSales().DeclareMethod(
 		`ActionViewSales`,
-		func(rs h.ProductTemplateSet) *actions.Action {
+		func(rs m.ProductTemplateSet) *actions.Action {
 			rs.EnsureOne()
 			action := actions.Registry.MustGetById("sale_action_product_sale_list")
 			products := rs.WithContext("active_test", false).ProductVariants()

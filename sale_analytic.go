@@ -8,6 +8,7 @@ import (
 
 	"github.com/hexya-erp/hexya/src/models"
 	"github.com/hexya-erp/pool/h"
+	"github.com/hexya-erp/pool/m"
 	"github.com/hexya-erp/pool/q"
 )
 
@@ -15,7 +16,7 @@ func init() {
 
 	h.SaleOrderLine().Methods().ComputeAnalytic().DeclareMethod(
 		`ComputeAnalytic updates analytic lines linked with this SaleOrderLine`,
-		func(rs h.SaleOrderLineSet, cond q.AccountAnalyticLineCondition) bool {
+		func(rs m.SaleOrderLineSet, cond q.AccountAnalyticLineCondition) bool {
 			lines := make(map[int64]float64)
 			forceSOLines := rs.Env().Context().GetIntegerSlice("force_so_lines")
 			if cond.IsEmpty() {
@@ -25,13 +26,13 @@ func init() {
 				cond = q.AccountAnalyticLine().SoLine().In(rs).And().Amount().LowerOrEqual(0)
 			}
 			data := h.AccountAnalyticLine().Search(rs.Env(), cond).
-				GroupBy(q.AccountAnalyticLine().ProductUom(), q.AccountAnalyticLine().SoLine()).
-				Aggregates(q.AccountAnalyticLine().ProductUom(), q.AccountAnalyticLine().SoLine(),
-					q.AccountAnalyticLine().UnitAmount())
+				GroupBy(h.AccountAnalyticLine().Fields().ProductUom(), h.AccountAnalyticLine().Fields().SoLine()).
+				Aggregates(h.AccountAnalyticLine().Fields().ProductUom(), h.AccountAnalyticLine().Fields().SoLine(),
+					h.AccountAnalyticLine().Fields().UnitAmount())
 			for _, d := range data {
-				uom := d.Values.ProductUom()
-				line := d.Values.SoLine()
-				qty := d.Values.UnitAmount()
+				uom := d.Values().ProductUom()
+				line := d.Values().SoLine()
+				qty := d.Values().UnitAmount()
 				if line.ProductUom().Category().Equals(uom.Category()) {
 					qty = uom.ComputeQuantity(qty, line.ProductUom(), true)
 				}
@@ -49,7 +50,7 @@ func init() {
 
 	h.AccountAnalyticLine().Methods().GetInvoicePrice().DeclareMethod(
 		`GetInvoicePrice returns the unit price to set on invoice`,
-		func(rs h.AccountAnalyticLineSet, order h.SaleOrderSet) float64 {
+		func(rs m.AccountAnalyticLineSet, order m.SaleOrderSet) float64 {
 			if rs.Product().ExpensePolicy() == "sales_price" {
 				return rs.Product().
 					WithContext("partner", order.Partner().ID()).
@@ -76,7 +77,7 @@ func init() {
 	h.AccountAnalyticLine().Methods().GetSaleOrderLineVals().DeclareMethod(
 		`GetSaleOrderLineVals returns the data to create a sale order line from this account analytic line on
 		the given order for the given price.`,
-		func(rs h.AccountAnalyticLineSet, order h.SaleOrderSet, price float64) *h.SaleOrderLineData {
+		func(rs m.AccountAnalyticLineSet, order m.SaleOrderSet, price float64) m.SaleOrderLineData {
 			lastSOLine := h.SaleOrderLine().Search(rs.Env(), q.SaleOrderLine().Order().Equals(order)).
 				OrderBy("Sequence DESC").Limit(1)
 			lastSequence := int64(100)
@@ -105,14 +106,14 @@ func init() {
 	h.AccountAnalyticLine().Methods().GetSaleOrderLine().DeclareMethod(
 		`GetSaleOrderLine adds the sale order line data to the given vals.
 		Returned data is a modified copy of vals.`,
-		func(rs h.AccountAnalyticLineSet, vals *h.AccountAnalyticLineData) *h.AccountAnalyticLineData {
-			result := *vals
+		func(rs m.AccountAnalyticLineSet, vals m.AccountAnalyticLineData) m.AccountAnalyticLineData {
+			result := vals
 			SOLine := result.SoLine()
 			if SOLine.IsEmpty() {
 				SOLine = rs.SoLine()
 			}
 			if !SOLine.IsEmpty() || rs.Account().IsEmpty() || rs.Product().IsEmpty() || rs.Product().ExpensePolicy() == "no" {
-				return &result
+				return result
 			}
 			orderInSale := h.SaleOrder().Search(rs.Env(),
 				q.SaleOrder().Project().Equals(rs.Account()).
@@ -122,7 +123,7 @@ func init() {
 				order = h.SaleOrder().Search(rs.Env(), q.SaleOrder().Project().Equals(rs.Account())).Limit(1)
 			}
 			if order.IsEmpty() {
-				return &result
+				return result
 			}
 			price := rs.GetInvoicePrice(order)
 			SOLines := h.SaleOrderLine().Search(rs.Env(),
@@ -131,7 +132,7 @@ func init() {
 					And().Product().Equals(rs.Product()))
 			if !SOLines.IsEmpty() {
 				result.SetSoLine(SOLines.Records()[0])
-				return &result
+				return result
 			}
 			if order.State() != "sale" {
 				panic(rs.T("The Sale Order %s linked to the Analytic Account must be validated before registering expenses.", order.Name()))
@@ -142,11 +143,11 @@ func init() {
 			NewSOLine.Write(NewSOLine.ComputeTax())
 			result.SetSoLine(NewSOLine)
 
-			return &result
+			return result
 		})
 
 	h.AccountAnalyticLine().Methods().Write().Extend("",
-		func(rs h.AccountAnalyticLineSet, data *h.AccountAnalyticLineData) bool {
+		func(rs m.AccountAnalyticLineSet, data m.AccountAnalyticLineData) bool {
 			if rs.Env().Context().GetBool("create") {
 				return rs.Super().Write(data)
 			}
@@ -164,7 +165,7 @@ func init() {
 		})
 
 	h.AccountAnalyticLine().Methods().Create().Extend("",
-		func(rs h.AccountAnalyticLineSet, data *h.AccountAnalyticLineData) h.AccountAnalyticLineSet {
+		func(rs m.AccountAnalyticLineSet, data m.AccountAnalyticLineData) m.AccountAnalyticLineSet {
 			line := rs.Super().Create(data)
 			vals := line.Sudo().GetSaleOrderLine(data)
 			line.WithContext("create", true).Write(vals)
@@ -177,7 +178,7 @@ func init() {
 		})
 
 	h.AccountAnalyticLine().Methods().Unlink().Extend("",
-		func(rs h.AccountAnalyticLineSet) int64 {
+		func(rs m.AccountAnalyticLineSet) int64 {
 			SOLines := h.SaleOrderLine().NewSet(rs.Env())
 			for _, line := range rs.Records() {
 				SOLines = SOLines.Union(line.SoLine())

@@ -6,7 +6,7 @@ package sale
 import (
 	"github.com/hexya-erp/hexya/src/models"
 	"github.com/hexya-erp/pool/h"
-	"github.com/hexya-erp/pool/q"
+	"github.com/hexya-erp/pool/m"
 )
 
 func init() {
@@ -36,20 +36,20 @@ func init() {
 	h.AccountInvoice().Methods().OnchangePartnerShipping().DeclareMethod(
 		`OnchangePartnerShipping triggers the change of fiscal position
 		when the shipping address is modified.`,
-		func(rs h.AccountInvoiceSet) *h.AccountInvoiceData {
+		func(rs m.AccountInvoiceSet) m.AccountInvoiceData {
 			fiscalPosition := h.AccountFiscalPosition().NewSet(rs.Env()).GetFiscalPosition(rs.Partner(), rs.PartnerShipping())
 			return h.AccountInvoice().NewData().SetFiscalPosition(fiscalPosition)
 		})
 
 	h.AccountInvoice().Methods().OnchangePartner().Extend("",
-		func(rs h.AccountInvoiceSet) *h.AccountInvoiceData {
+		func(rs m.AccountInvoiceSet) m.AccountInvoiceData {
 			data := rs.Super().OnchangePartner()
 			data.SetPartnerShipping(rs.Partner().AddressGet([]string{"delivery"})["delivery"])
 			return data
 		})
 
 	//h.AccountInvoice().Methods().ActionInvoicePaid().Extend("",
-	//	func(rs h.AccountInvoiceSet) bool {
+	//	func(rs m.AccountInvoiceSet) bool {
 	//		res := rs.Super().ActionInvoicePaid()
 	//		todo := make(map[struct {
 	//			order h.SaleOrderSet
@@ -75,7 +75,7 @@ func init() {
 	//h.AccountInvoice().Methods().OrderLinesLayouted().DeclareMethod(
 	//	`OrderLinesLayouted returns this sale order lines ordered by sale_layout_category sequence.
 	//	Used to render the report.`,
-	//	func(rs h.AccountInvoiceSet) {
+	//	func(rs m.AccountInvoiceSet) {
 	//		//@api.multi
 	//		/*
 	//		  self.ensure_one()
@@ -98,18 +98,18 @@ func init() {
 	//	})
 
 	h.AccountInvoice().Methods().GetDeliveryPartner().Extend("",
-		func(rs h.AccountInvoiceSet) h.PartnerSet {
-			rs.EnsureOne()
-			if !rs.PartnerShipping().IsEmpty() {
+		func(rs m.AccountInvoiceSet, partner m.PartnerSet) m.PartnerSet {
+			partner.EnsureOne()
+			if rs.PartnerShipping().IsNotEmpty() {
 				return rs.PartnerShipping()
 			}
-			return rs.Super().GetDeliveryPartner()
+			return rs.Super().GetDeliveryPartner(partner)
 		})
 
 	h.AccountInvoice().Methods().GetRefundCommonFields().Extend("",
-		func(rs h.AccountInvoiceSet) []models.FieldNamer {
+		func(rs m.AccountInvoiceSet) []models.FieldNamer {
 			return append(rs.Super().GetRefundCommonFields(),
-				q.AccountInvoice().Team(), q.AccountInvoice().PartnerShipping())
+				h.AccountInvoice().Fields().Team(), h.AccountInvoice().Fields().PartnerShipping())
 		})
 
 	h.AccountInvoiceLine().SetDefaultOrder("Invoice", "LayoutCategory", "Sequence", "ID")

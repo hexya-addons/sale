@@ -9,6 +9,7 @@ import (
 	"github.com/hexya-erp/hexya/src/models"
 	"github.com/hexya-erp/hexya/src/models/types"
 	"github.com/hexya-erp/pool/h"
+	"github.com/hexya-erp/pool/m"
 )
 
 func init() {
@@ -49,7 +50,7 @@ func init() {
 
 	h.SaleReport().Methods().Select().DeclareMethod(
 		`Select returns the select clause of the SQL view.`,
-		func(rs h.SaleReportSet) string {
+		func(rs m.SaleReportSet) string {
 			selectStr := fmt.Sprintf(`
 			      WITH cur_rate as (%s)
 			       SELECT min(l.id) as id,
@@ -84,7 +85,7 @@ func init() {
 
 	h.SaleReport().Methods().From().DeclareMethod(
 		`From returns the from clause of the SQL view.`,
-		func(rs h.SaleReportSet) string {
+		func(rs m.SaleReportSet) string {
 			fromStr := `
 			          sale_order_line l
 			                join sale_order s on (l.order_id=s.id)
@@ -104,7 +105,7 @@ func init() {
 
 	h.SaleReport().Methods().GroupByClause().DeclareMethod(
 		`GroupByClause returns the group by clause of the SQL view`,
-		func(rs h.SaleReportSet) string {
+		func(rs m.SaleReportSet) string {
 			groupByStr := `
 				GROUP BY l.product_id,
 					l.order_id,
@@ -128,7 +129,7 @@ func init() {
 
 	h.SaleReport().Methods().Init().DeclareMethod(
 		`Init initializes the SaleReport view`,
-		func(rs h.SaleReportSet) {
+		func(rs m.SaleReportSet) {
 			rs.Env().Cr().Execute(fmt.Sprintf(`
 				DROP VIEW IF EXISTS sale_report;
 				CREATE or REPLACE VIEW sale_report as (

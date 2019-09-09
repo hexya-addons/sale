@@ -6,6 +6,7 @@ package sale
 import (
 	"github.com/hexya-erp/hexya/src/models"
 	"github.com/hexya-erp/pool/h"
+	"github.com/hexya-erp/pool/m"
 )
 
 func init() {
@@ -15,17 +16,17 @@ func init() {
 	})
 
 	h.AccountInvoiceReport().Methods().Select().Extend("",
-		func(rs h.AccountInvoiceReportSet) string {
+		func(rs m.AccountInvoiceReportSet) string {
 			return rs.Super().Select() + ", sub.team_id as team_id"
 		})
 
 	h.AccountInvoiceReport().Methods().SubSelect().Extend("",
-		func(rs h.AccountInvoiceReportSet) string {
+		func(rs m.AccountInvoiceReportSet) string {
 			return rs.Super().SubSelect() + ", ai.team_id as team_id"
 		})
 
 	h.AccountInvoiceReport().Methods().GroupByClause().Extend("",
-		func(rs h.AccountInvoiceReportSet) string {
+		func(rs m.AccountInvoiceReportSet) string {
 			return rs.Super().GroupByClause() + ", ai.team_id"
 		})
 

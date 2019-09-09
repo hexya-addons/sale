@@ -19,9 +19,28 @@ var (
 	GroupShowPriceSubtotal *security.Group
 	// GroupShowPriceTotal shows line subtotals with taxes (B2C)
 	GroupShowPriceTotal *security.Group
+	// GroupMRPProperties shows properties on sale lines
+	GroupMRPProperties *security.Group
+	// GroupDiscountPerSOLine shows discount on each sale lines
+	GroupDiscountPerSOLine *security.Group
+	// GroupDisplayIncoterms shows incoterms in sale orders
+	GroupDisplayIncoterms *security.Group
+	// GroupWarningSale allows warnings to be set on a product or a customer (sale)
+	GroupWarningSale *security.Group
+	// GroupAnalyticAccounting enables analytic accounting for sales
+	GroupAnalyticAccounting *security.Group
 )
 
 func init() {
+	GroupSaleLayout = security.Registry.NewGroup("sale_group_sale_layout", "Personalize sale order and invoice report")
+	GroupDeliveryInvoiceAddress = security.Registry.NewGroup("sale_group_delivery_invoice_address", "Addresses in Sales Orders")
+	GroupShowPriceSubtotal = security.Registry.NewGroup("sale_group_show_price_subtotal", "Show line subtotals without taxes (B2B)")
+	GroupShowPriceTotal = security.Registry.NewGroup("sale_group_show_price_total", "Show line subtotals with taxes included (B2C)")
+	GroupMRPProperties = security.Registry.NewGroup("sale_group_mrp_properties", "Properties on lines")
+	GroupDiscountPerSOLine = security.Registry.NewGroup("sale_group_discount_per_so_line", "Discount on lines")
+	GroupDisplayIncoterms = security.Registry.NewGroup("sale_group_display_incoterm", "Display incoterms on Sales Order and related invoices")
+	GroupWarningSale = security.Registry.NewGroup("sale_group_warning_sale", "A warning can be set on a product or a customer (Sale)")
+	GroupAnalyticAccounting = security.Registry.NewGroup("sale_group_analytic_accounting", "Analytic Accounting for Sales")
 
 	h.SaleOrder().Methods().AllowAllToGroup(saleTeams.GroupSaleSalesman)
 	h.SaleOrderLine().Methods().AllowAllToGroup(saleTeams.GroupSaleSalesman)
@@ -37,7 +56,6 @@ func init() {
 	h.SaleOrder().Methods().AllowAllToGroup(account.GroupAccountUser)
 	h.SaleReport().Methods().AllowAllToGroup(saleTeams.GroupSaleSalesman)
 	h.SaleReport().Methods().AllowAllToGroup(saleTeams.GroupSaleManager)
-	//h.IrProperty().Methods().AllowAllToGroup(saleTeams.GroupSaleSalesman)
 	h.AccountJournal().Methods().Load().AllowGroup(saleTeams.GroupSaleSalesman)
 	h.Partner().Methods().Load().AllowGroup(saleTeams.GroupSaleSalesman)
 	h.Partner().Methods().AllowAllToGroup(saleTeams.GroupSaleManager)

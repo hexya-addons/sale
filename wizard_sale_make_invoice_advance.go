@@ -13,6 +13,7 @@ import (
 	"github.com/hexya-erp/hexya/src/models/types"
 	"github.com/hexya-erp/hexya/src/models/types/dates"
 	"github.com/hexya-erp/pool/h"
+	"github.com/hexya-erp/pool/m"
 	"github.com/hexya-erp/pool/q"
 )
 
@@ -68,7 +69,7 @@ func init() {
 
 	h.SaleAdvancePaymentInv().Methods().DefaultProduct().DeclareMethod(
 		`DefaultProduct returns the default deposit product`,
-		func(rs h.SaleAdvancePaymentInvSet) h.ProductProductSet {
+		func(rs m.SaleAdvancePaymentInvSet) m.ProductProductSet {
 			conf := h.ConfigParameter().NewSet(rs.Env()).GetParam("deposit_product_id_setting", "")
 			accountID, err := strconv.ParseInt(conf, 10, 64)
 			if err != nil {
@@ -79,7 +80,7 @@ func init() {
 
 	h.SaleAdvancePaymentInv().Methods().OnchangeAdvancePaymentMethod().DeclareMethod(
 		`OnchangeAdvancePaymentMethod sets the amount to 0 when percentage is selected.`,
-		func(rs h.SaleAdvancePaymentInvSet) *h.SaleAdvancePaymentInvData {
+		func(rs m.SaleAdvancePaymentInvSet) m.SaleAdvancePaymentInvData {
 			res := h.SaleAdvancePaymentInv().NewData()
 			if rs.AdvancePaymentMethod() == "percentage" {
 				res.SetAmount(0)
@@ -89,7 +90,7 @@ func init() {
 
 	h.SaleAdvancePaymentInv().Methods().CreateInvoice().DeclareMethod(
 		`CreateInvoice creates a deposit invoice for the given order and order line.`,
-		func(rs h.SaleAdvancePaymentInvSet, order h.SaleOrderSet, soLine h.SaleOrderLineSet) h.AccountInvoiceSet {
+		func(rs m.SaleAdvancePaymentInvSet, order m.SaleOrderSet, soLine m.SaleOrderLineSet) m.AccountInvoiceSet {
 			account := h.AccountAccount().NewSet(rs.Env())
 			if !rs.Product().IsEmpty() {
 				account = rs.Product().PropertyAccountIncome()
@@ -171,7 +172,7 @@ You may have to install a chart of account from Accounting app, settings menu.`,
 
 	h.SaleAdvancePaymentInv().Methods().CreateInvoices().DeclareMethod(
 		`CreateInvoices is the main method called from the wizard to create the invoices.`,
-		func(rs h.SaleAdvancePaymentInvSet) *actions.Action {
+		func(rs m.SaleAdvancePaymentInvSet) *actions.Action {
 			rs.EnsureOne()
 			saleOrders := h.SaleOrder().Browse(rs.Env(), rs.Env().Context().GetIntegerSlice("active_ids"))
 			switch rs.AdvancePaymentMethod() {
@@ -232,7 +233,7 @@ Please use another product or update this product.`))
 
 	h.SaleAdvancePaymentInv().Methods().PrepareDepositProduct().DeclareMethod(
 		`PrepareDepositProduct returns the data used to create the deposit product.`,
-		func(rs h.SaleAdvancePaymentInvSet) *h.ProductProductData {
+		func(rs m.SaleAdvancePaymentInvSet) m.ProductProductData {
 			return h.ProductProduct().NewData().
 				SetName("Down payment").
 				SetType("service").

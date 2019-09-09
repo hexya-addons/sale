@@ -10,6 +10,7 @@ import (
 	"github.com/hexya-erp/hexya/src/models/types/dates"
 	"github.com/hexya-erp/hexya/src/tools/nbutils"
 	"github.com/hexya-erp/pool/h"
+	"github.com/hexya-erp/pool/m"
 	"github.com/hexya-erp/pool/q"
 )
 
@@ -37,22 +38,22 @@ team estimates to be able to invoice this month.`},
 
 	h.CRMTeam().Methods().ComputeSalesToInvoiceAmount().DeclareMethod(
 		`ComputeSalesToInvoiceAmount computes the total amount of sale orders that have not yet been invoiced`,
-		func(rs h.CRMTeamSet) *h.CRMTeamData {
+		func(rs m.CRMTeamSet) m.CRMTeamData {
 			amounts := h.SaleOrder().Search(rs.Env(),
 				q.SaleOrder().Team().Equals(rs).
 					And().InvoiceStatus().Equals("to invoice")).
-				GroupBy(q.SaleOrder().Team()).
-				Aggregates(q.SaleOrder().Team(), q.SaleOrder().AmountTotal())
+				GroupBy(h.SaleOrder().Fields().Team()).
+				Aggregates(h.SaleOrder().Fields().Team(), h.SaleOrder().Fields().AmountTotal())
 			if len(amounts) == 0 {
 				return h.CRMTeam().NewData()
 			}
-			amount := amounts[0].Values.AmountTotal()
+			amount := amounts[0].Values().AmountTotal()
 			return h.CRMTeam().NewData().SetSalesToInvoiceAmount(amount)
 		})
 
 	h.CRMTeam().Methods().ComputeInvoiced().DeclareMethod(
 		`ComputeInvoiced returns the total amount invoiced by this sale team this month.`,
-		func(rs h.CRMTeamSet) *h.CRMTeamData {
+		func(rs m.CRMTeamSet) m.CRMTeamData {
 			firstDayOfMonth := dates.Date{Time: time.Date(dates.Today().Year(), dates.Today().Month(), 1,
 				0, 0, 0, 0, time.UTC)}
 			invoices := h.AccountInvoice().Search(rs.Env(),
@@ -61,24 +62,24 @@ team estimates to be able to invoice this month.`},
 					And().Date().LowerOrEqual(dates.Today()).
 					And().Date().GreaterOrEqual(firstDayOfMonth).
 					And().Type().In([]string{"out_invoice", "out_refund"})).
-				GroupBy(q.AccountInvoice().Team()).
-				Aggregates(q.AccountInvoice().Team(), q.AccountInvoice().AmountUntaxedSigned())
+				GroupBy(h.AccountInvoice().Fields().Team()).
+				Aggregates(h.AccountInvoice().Fields().Team(), h.AccountInvoice().Fields().AmountUntaxedSigned())
 			if len(invoices) == 0 {
 				return h.CRMTeam().NewData()
 			}
-			amount := invoices[0].Values.AmountUntaxedSigned()
+			amount := invoices[0].Values().AmountUntaxedSigned()
 			return h.CRMTeam().NewData().SetInvoiced(amount)
 		})
 
 	h.CRMTeam().Methods().UpdateInvoicedTarget().DeclareMethod(
 		`UpdateInvoicedTarget updates the invoice target with the given value`,
-		func(rs h.CRMTeamSet, value float64) bool {
+		func(rs m.CRMTeamSet, value float64) bool {
 			return rs.Write(h.CRMTeam().NewData().SetInvoicedTarget(nbutils.Round(value, 1)))
 		})
 
 	h.CRMTeam().Methods().OnchangeUseQuotation().DeclareMethod(
 		`OnchangeUseQuotation makes sure we use invoices if we use quotations.`,
-		func(rs h.CRMTeamSet) *h.CRMTeamData {
+		func(rs m.CRMTeamSet) m.CRMTeamData {
 			return h.CRMTeam().NewData().SetUseInvoices(rs.UseQuotations())
 		})
 
