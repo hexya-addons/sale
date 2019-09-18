@@ -17,6 +17,7 @@ import (
 	"github.com/hexya-erp/hexya/src/models/types"
 	"github.com/hexya-erp/hexya/src/models/types/dates"
 	"github.com/hexya-erp/hexya/src/tools/nbutils"
+	"github.com/hexya-erp/hexya/src/tools/strutils"
 	"github.com/hexya-erp/hexya/src/views"
 	"github.com/hexya-erp/pool/h"
 	"github.com/hexya-erp/pool/m"
@@ -29,8 +30,10 @@ func init() {
 	h.SaleOrder().SetDefaultOrder("DateOrder DESC", "ID DESC")
 
 	h.SaleOrder().AddFields(map[string]models.FieldDefinition{
-		"Name": models.CharField{String: "Order Reference", Required: true, NoCopy: true, /*[ readonly True]*/
-			/*[ states {'draft': [('readonly']*/ /*[ False)]}]*/ Index: true,
+		"Name": models.CharField{String: "Order Reference", Required: true, NoCopy: true, Index: true,
+			ReadOnlyFunc: func(env models.Environment) (bool, models.Conditioner) {
+				return false, q.SaleOrder().State().NotEquals("draft")
+			},
 			Default: func(env models.Environment) interface{} {
 				return h.SaleOrder().NewSet(env).T("New")
 			}},
@@ -98,17 +101,17 @@ based on the template if online quotation is installed.`},
 			Copy: true},
 		"InvoiceCount": models.IntegerField{String: "# of Invoices",
 			Compute: h.SaleOrder().Methods().GetInvoiced(),
-			Depends: []string{"state", "OrderLine.InvoiceStatus"}, GoType: new(int)},
+			Depends: []string{"State", "OrderLine.InvoiceStatus"}, GoType: new(int)},
 		"Invoices": models.Many2ManyField{String: "Invoices", RelationModel: h.AccountInvoice(),
 			JSON: "invoice_ids", Compute: h.SaleOrder().Methods().GetInvoiced(),
-			Depends: []string{"state", "OrderLine.InvoiceStatus"}, NoCopy: true},
+			Depends: []string{"State", "OrderLine.InvoiceStatus"}, NoCopy: true},
 		"InvoiceStatus": models.SelectionField{Selection: types.Selection{
 			"upselling":  "Upselling Opportunity",
 			"invoiced":   "Fully Invoiced",
 			"to invoice": "To Invoice",
 			"no":         "Nothing to Invoice",
 		}, Compute: h.SaleOrder().Methods().GetInvoiced(),
-			Depends: []string{"state", "OrderLine.InvoiceStatus"}, Stored: true},
+			Depends: []string{"State", "OrderLine.InvoiceStatus"}, Stored: true},
 		"Note": models.TextField{String: "Terms and conditions",
 			Default: func(env models.Environment) interface{} {
 				return h.User().NewSet(env).CurrentUser().Company().SaleNote()
@@ -212,13 +215,13 @@ based on the template if online quotation is installed.`},
 			}
 			var invoiceStatus string
 			switch {
-			case rs.State() != "sale" && rs.State() != "done":
+			case !strutils.IsIn(rs.State(), "sale", "done"):
 				invoiceStatus = "no"
 			case lineInvoiceStatus["to invoice"]:
 				invoiceStatus = "to invoice"
 			case len(lineInvoiceStatus) == 1 && lineInvoiceStatus["invoiced"]:
 				invoiceStatus = "invoiced"
-			case len(lineInvoiceStatus) <= 2 && (lineInvoiceStatus["invoiced"] || lineInvoiceStatus["upselling"]):
+			case len(lineInvoiceStatus) == 2 && lineInvoiceStatus["invoiced"] && lineInvoiceStatus["upselling"]:
 				invoiceStatus = "upselling"
 			default:
 				invoiceStatus = "no"
@@ -259,7 +262,7 @@ based on the template if online quotation is installed.`},
 	h.SaleOrder().Methods().Unlink().Extend("",
 		func(rs m.SaleOrderSet) int64 {
 			for _, order := range rs.Records() {
-				if order.State() != "draft" && order.State() != "cancel" {
+				if !strutils.IsIn(order.State(), "draft", "cancel") {
 					panic(rs.T("You can not delete a sent quotation or a sales order! Try to cancel it before."))
 				}
 			}
@@ -482,11 +485,8 @@ based on the template if online quotation is installed.`},
 				if grouped {
 					groupKey = keyStruct{OrderID: order.ID()}
 				}
-				lines := order.OrderLine().Records()
-				sort.Slice(lines, func(i, j int) bool {
-					return lines[i].QtyToInvoice() < lines[j].QtyToInvoice()
-				})
-				for _, line := range lines {
+				lines := order.OrderLine().SortedByField(h.SaleOrderLine().Fields().QtyToInvoice(), false)
+				for _, line := range lines.Records() {
 					if nbutils.IsZero(line.QtyToInvoice(), precision) {
 						continue
 					}
@@ -654,6 +654,7 @@ based on the template if online quotation is installed.`},
 			  return True
 
 			*/
+			rs.ActionQuotationSend()
 			return true
 		})
 
@@ -883,21 +884,20 @@ based on the template if online quotation is installed.`},
 		func(rs m.SaleOrderLineSet) m.SaleOrderLineData {
 			precision := decimalPrecision.GetPrecision("Product Unit of Measure").ToPrecision()
 			invoiceStatus := "no"
-			for _, line := range rs.Records() {
-				switch {
-				case line.State() != "sale" && line.State() != "done":
-					invoiceStatus = "no"
-				case !nbutils.IsZero(line.QtyToInvoice(), precision):
-					invoiceStatus = "to invoice"
-				case line.State() == "sale" && line.Product().InvoicePolicy() == "order" &&
-					nbutils.Compare(line.QtyDelivered(), line.ProductUomQty(), precision) > 0:
-					invoiceStatus = "upselling"
-				case nbutils.Compare(line.QtyInvoiced(), line.ProductUomQty(), precision) >= 0:
-					invoiceStatus = "invoiced"
-				default:
-					invoiceStatus = "no"
-				}
+			switch {
+			case rs.State() != "sale" && rs.State() != "done":
+				invoiceStatus = "no"
+			case !nbutils.IsZero(rs.QtyToInvoice(), precision):
+				invoiceStatus = "to invoice"
+			case rs.State() == "sale" && rs.Product().InvoicePolicy() == "order" &&
+				nbutils.Compare(rs.QtyDelivered(), rs.ProductUomQty(), precision) > 0:
+				invoiceStatus = "upselling"
+			case nbutils.Compare(rs.QtyInvoiced(), rs.ProductUomQty(), precision) >= 0:
+				invoiceStatus = "invoiced"
+			default:
+				invoiceStatus = "no"
 			}
+
 			return h.SaleOrderLine().NewData().SetInvoiceStatus(invoiceStatus)
 		})
 
@@ -925,7 +925,7 @@ based on the template if online quotation is installed.`},
 		delivered is used.`,
 		func(rs m.SaleOrderLineSet) m.SaleOrderLineData {
 			if rs.Order().State() != "sale" && rs.Order().State() != "done" {
-				return h.SaleOrderLine().NewData()
+				return h.SaleOrderLine().NewData().SetQtyToInvoice(0)
 			}
 			qtyToInvoice := rs.QtyDelivered() - rs.QtyInvoiced()
 			if rs.Product().InvoicePolicy() == "order" {
@@ -1333,7 +1333,7 @@ based on the template if online quotation is installed.`},
 
 			productContext := rs.Env().Context().
 				WithKey("partner_id", rs.Order().Partner().ID()).
-				WithKey("date", rs.Order().DateOrder()).
+				WithKey("date", rs.Order().DateOrder().ToDate()).
 				WithKey("uom", rs.ProductUom().ID())
 
 			qty := float64(1)

@@ -70,7 +70,7 @@ func init() {
 	h.SaleAdvancePaymentInv().Methods().DefaultProduct().DeclareMethod(
 		`DefaultProduct returns the default deposit product`,
 		func(rs m.SaleAdvancePaymentInvSet) m.ProductProductSet {
-			conf := h.ConfigParameter().NewSet(rs.Env()).GetParam("deposit_product_id_setting", "")
+			conf := h.ConfigParameter().NewSet(rs.Env()).Sudo().GetParam("deposit_product_id_setting", "")
 			accountID, err := strconv.ParseInt(conf, 10, 64)
 			if err != nil {
 				return h.ProductProduct().NewSet(rs.Env())
