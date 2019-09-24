@@ -1,0 +1,2 @@
+ID,Name,Category,Type,ListPrice,InvoicePolicy,StandardPrice,Uom,UomPo,Company,Image
+sale_advance_product_0,Deposit,product_product_category_1,service,150.0,order,100.0,product_product_uom_unit,product_product_uom_unit,,img/advance_product_0-image.jpg

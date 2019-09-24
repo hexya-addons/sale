@@ -86,6 +86,9 @@ func TestSaleOrder(t *testing.T) {
 				}
 				so := h.SaleOrder().Create(env, soData)
 				So(so.AmountTotal(), ShouldEqual, amountTotal)
+				So(so.Name(), ShouldNotBeEmpty)
+				So(so.Name(), ShouldNotEqual, "False")
+				So(so.Name(), ShouldNotEqual, "New")
 
 				// Send quotation
 				so.ForceQuotationSend()
@@ -144,6 +147,66 @@ func TestSaleOrder(t *testing.T) {
 				so.ActionDone()
 				So(so.State(), ShouldEqual, "done")
 				So(func() { so.Sudo(tsd.Manager.ID()).Unlink() }, ShouldPanic)
+			})
+			Convey("Test confirming a vendor invoice to reinvoice cost on the so", func() {
+				list0 := h.ProductPricelist().NewSet(env).GetRecord("product_list0")
+				company := h.Company().NewSet(env).GetRecord("base_main_company")
+				list0.SetCurrency(company.Currency())
+				servCost := h.ProductProduct().NewSet(env).GetRecord("product_service_cost_01")
+				prodGap := h.ProductProduct().NewSet(env).GetRecord("product_product_product_1")
+				so := h.SaleOrder().Create(env, h.SaleOrder().NewData().
+					SetPartner(tsd.Partner).
+					SetPartnerInvoice(tsd.Partner).
+					SetPartnerShipping(tsd.Partner).
+					SetPricelist(list0).
+					CreateOrderLine(h.SaleOrderLine().NewData().
+						SetName(prodGap.Name()).
+						SetProduct(prodGap).
+						SetProductUomQty(2).
+						SetProductUom(prodGap.Uom()).
+						SetPriceUnit(prodGap.ListPrice())))
+				so.ActionConfirm()
+				so.CreateAnalyticAccount("")
+				invPartner := h.Partner().NewSet(env).GetRecord("base_res_partner_2")
+				journal := h.AccountJournal().Create(env, h.AccountJournal().NewData().
+					SetName("Purchase Journal").
+					SetCode("STPJ").
+					SetType("purchase").
+					SetCompany(company))
+				accountPayable := h.AccountAccount().Create(env, h.AccountAccount().NewData().
+					SetCode("X1111").
+					SetName("Sale - Test Payable Account").
+					SetUserType(h.AccountAccountType().NewSet(env).GetRecord("account_data_account_type_payable")).
+					SetReconcile(true))
+				accountIncome := h.AccountAccount().Create(env, h.AccountAccount().NewData().
+					SetCode("X1112").
+					SetName("Sale - Test Account").
+					SetUserType(h.AccountAccountType().NewSet(env).GetRecord("account_data_account_type_direct_costs")))
+				invoiceVals := h.AccountInvoice().NewData().
+					SetName("").
+					SetType("in_invoice").
+					SetPartner(invPartner).
+					SetAccount(accountPayable).
+					SetJournal(journal).
+					SetCurrency(company.Currency()).
+					CreateInvoiceLines(h.AccountInvoiceLine().NewData().
+						SetName(servCost.Name()).
+						SetProduct(servCost).
+						SetQuantity(2).
+						SetUom(servCost.Uom()).
+						SetPriceUnit(servCost.StandardPrice()).
+						SetAccountAnalytic(so.Project()).
+						SetAccount(accountIncome))
+				inv := h.AccountInvoice().Create(env, invoiceVals)
+				inv.ActionInvoiceOpen()
+				sol := so.OrderLine().Filtered(func(r m.SaleOrderLineSet) bool {
+					return r.Product().Equals(servCost)
+				})
+				So(sol.IsNotEmpty(), ShouldBeTrue)
+				So(sol.PriceUnit(), ShouldEqual, 160)
+				So(sol.QtyDelivered(), ShouldEqual, 2)
+				So(sol.ProductUomQty(), ShouldEqual, 0)
+				So(sol.QtyInvoiced(), ShouldEqual, 0)
 			})
 		}), ShouldBeNil)
 	})

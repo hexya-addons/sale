@@ -366,7 +366,7 @@ based on the template if online quotation is installed.`},
 		func(rs m.SaleOrderSet, data m.SaleOrderData) m.SaleOrderSet {
 			if data.Name() == "" || data.Name() == rs.T("New") {
 				seq := h.Sequence().NewSet(rs.Env())
-				if !data.Company().IsEmpty() {
+				if data.Company().IsNotEmpty() {
 					seq = seq.WithContext("force_company", data.Company().ID())
 				}
 				data.SetName(rs.T("New"))

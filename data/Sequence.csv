@@ -1,0 +1,2 @@
+ID,Name,Code,Prefix,Padding,Company
+sale_seq_sale_order,Sales Order,sale.order,SO,3,
